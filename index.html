@@ -377,7 +377,7 @@
                     img.onload = () => {
                         // تعديل: زيادة قوة الضغط لحل مشكلة بطء الحفظ
                         const canvas = document.createElement('canvas');
-                        const MAX_WIDTH = 600; // تقليل أقصى عرض
+                        const MAX_WIDTH = 500; // تقليل أقصى عرض لـ 500
                         let width = img.width;
                         let height = img.height;
                         
@@ -391,8 +391,8 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
                         
-                        // تعديل: تقليل جودة الصورة لـ 60% لتصغير الحجم بشكل ممتاز لتسريع فايربيس
-                        const dataUrl = canvas.toDataURL('image/jpeg', 0.60);
+                        // تعديل: استخدام صيغة webp مع جودة 60% لتصغير الحجم بشكل ممتاز لتسريع فايربيس
+                        const dataUrl = canvas.toDataURL('image/webp', 0.60);
                         state.formImages.push(dataUrl);
                         state.isUploading = false;
                         renderApp();
