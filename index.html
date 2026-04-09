@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>لوحة الإدارة - Mahmoud Elmrakby</title>
     
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
@@ -35,7 +36,7 @@
         import { getFirestore, collection, doc, setDoc, onSnapshot, getDocs, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // ============================================================================
-        // 🔴 إعدادات قاعدة بيانات فايربيس (مطابقة لإعدادات المنيو) 🔴
+        // 🔴 إعدادات قاعدة بيانات فايربيس (مطابقة تماماً للمنيو) 🔴
         // ============================================================================
         const firebaseConfig = {
           apiKey: "AIzaSyCI0L2fO4_bdltYF7Hddjcxa6seSDbrMwc",
@@ -53,7 +54,7 @@
             menuTab: 'photography',
             bookingsData: [],
             menuData: getInitialData(),
-            notes: "تأكيد الحجز وتثبيت الموعد يتطلب دفع مبلغ عربون مقدماً.\nرسوم تذكرة دخول مكان التصوير (الأرضية) غير شاملة في الباقة وتكون على نفقة العميل.",
+            notes: "مقدم الحجز ( 1000 جنيه )\nالتصوير غير شامل تكلفة أرضية التصوير.\nفي حالة التصوير خارج المنصورة يتم إضافة ( 500 جنيه ).",
             db: null,
             appId: 'mrakby-studio-app',
             isEditModalOpen: false,
@@ -80,8 +81,8 @@
                 if(state.isAuthenticated) renderApp();
             });
 
-            // الاستماع للمنيو
-            const menuRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', 'studio_menu', 'latest');
+            // الاستماع للمنيو (المسار v2026)
+            const menuRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', 'studio_menu', 'v2026');
             onSnapshot(menuRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
@@ -115,7 +116,6 @@
             lucide.createIcons();
         };
 
-        // استدعاء دالة الرسم فوراً لعرض شاشة تسجيل الدخول
         window.renderApp();
 
         // --- Login ---
@@ -258,22 +258,19 @@
             </div>`;
         }
 
-        // إرسال الفاتورة والرابط الخاص بالعميل على رقمه المسجل
         window.sendWhatsAppToClient = (id) => {
             const b = state.bookingsData.find(x => x.id === id);
             if(!b) return;
             
             let phone = b.phone.trim();
-            // تظبيط رقم الهاتف إذا كان يبدأ بـ 0 (مصر)
             if(phone.startsWith('0')) phone = '2' + phone; 
 
-            // توجيه الرابط إجبارياً لملف المنيو (الرئيسية) بدلاً من الإدارة
+            // توجيه الرابط إجبارياً لملف المنيو
             let domain = window.location.origin;
             let path = window.location.pathname.replace(/admin\.html/i, '');
             if (!path.endsWith('/')) path += '/';
             
             const portalUrl = domain + path + '?portal=' + b.receiptNumber;
-            
             const clientName = b.customerName || b.groom;
             
             const msg = `مرحباً أ. ${clientName}،\nنشكرك على اختيارك (Mahmoud Elmrakby Studio) 📸\n\nتأكيداً على حجزك معنا:\nالباقة: *${b.packageName}*\nموعد المناسبة: ${b.date}\nرقم الإيصال: *${b.receiptNumber}*\n\nللدخول إلى ملفك الخاص لمتابعة حالة الحجز واستلام صورك بجودة عالية، يُرجى الدخول على الرابط التالي:\n${portalUrl}\n\nالرقم السري الخاص بك هو: ${b.password}\n\nنتمنى لك أوقاتاً سعيدة!`;
@@ -281,7 +278,6 @@
             window.open(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`, '_blank');
         };
 
-        // تعديل الرقم السري للعميل
         window.editClientPassword = async (id) => {
             const b = state.bookingsData.find(x => x.id === id);
             if(!b) return;
@@ -353,7 +349,6 @@
 
         window.switchMenuTab = (id) => { state.menuTab = id; renderApp(); };
 
-        // --- Editing Menu Logic ---
         window.openMenuModal = (id) => {
             if (id === 'promo') { state.editingItem = state.menuData.promos[state.menuTab]; state.formImages = state.editingItem?.images || []; }
             else if (id === 'notes') { state.editingItem = { id: 'notes', desc: state.notes }; }
@@ -365,37 +360,213 @@
             renderApp();
         };
 
-        window.toggleEditMode = () => { state.isEditMode = !state.isEditMode; renderApp(); };
+        window.closeMenuModal = () => { state.isEditModalOpen = false; renderApp(); };
 
-        // دالة توفير البيانات المبدئية عند فراغ قاعدة البيانات
+        window.handleFileUpload = (e) => {
+            const files = Array.from(e.target.files);
+            files.forEach(file => {
+                if (!file.type.startsWith('image/')) return;
+                
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 800; 
+                        let width = img.width;
+                        let height = img.height;
+                        
+                        if (width > MAX_WIDTH) {
+                            height *= MAX_WIDTH / width;
+                            width = MAX_WIDTH;
+                        }
+                        
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        
+                        const dataUrl = canvas.toDataURL('image/jpeg', 0.75);
+                        state.formImages.push(dataUrl);
+                        renderApp();
+                    };
+                    img.src = reader.result;
+                };
+                reader.readAsDataURL(file);
+            });
+            e.target.value = '';
+        };
+
+        window.removeFormImage = (idx) => { state.formImages.splice(idx,1); renderApp(); };
+
+        window.saveMenuItem = async (e) => {
+            e.preventDefault();
+            const fd = new FormData(e.target);
+            const type = fd.get('type');
+            
+            if (type === 'notes') {
+                await setDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'studio_menu', 'v2026'), { notes: fd.get('desc') }, {merge: true});
+                closeMenuModal(); return;
+            }
+
+            let newMenuData = JSON.parse(JSON.stringify(state.menuData)); // deep copy
+
+            if (type === 'promo') {
+                newMenuData.promos[state.menuTab] = {
+                    isActive: fd.get('isActive') === 'on',
+                    title: fd.get('title'), desc: fd.get('desc'),
+                    price: fd.get('price'), oldPrice: fd.get('oldPrice'),
+                    link: fd.get('link'), categoryName: fd.get('categoryName'),
+                    images: state.formImages
+                };
+            } else {
+                const newItem = {
+                    id: state.editingItem ? state.editingItem.id : Date.now(),
+                    name: fd.get('name'), price: fd.get('price'),
+                    images: state.formImages,
+                    isPopular: fd.get('isPopular') === 'on',
+                    isMini: fd.get('isMini') === 'on'
+                };
+                if (['photography', 'video'].includes(state.menuTab)) {
+                    newItem.features = fd.get('features').split('\n').filter(f => f.trim() !== '');
+                } else {
+                    newItem.desc = fd.get('desc');
+                }
+
+                if (state.editingItem) {
+                    newMenuData[state.menuTab] = newMenuData[state.menuTab].map(i => i.id === state.editingItem.id ? newItem : i);
+                } else {
+                    newMenuData[state.menuTab].push(newItem);
+                }
+            }
+
+            await setDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'studio_menu', 'v2026'), { menuData: newMenuData }, {merge: true});
+            closeMenuModal();
+        };
+
+        window.deleteMenuItem = async (id) => {
+            if(confirm('متأكد من الحذف؟')) {
+                let newMenuData = JSON.parse(JSON.stringify(state.menuData));
+                newMenuData[state.menuTab] = newMenuData[state.menuTab].filter(i => i.id !== id);
+                await setDoc(doc(state.db, 'artifacts', state.appId, 'public', 'data', 'studio_menu', 'v2026'), { menuData: newMenuData }, {merge: true});
+            }
+        };
+
+        function renderEditModal() {
+            const item = state.editingItem;
+            const type = item?.id === 'notes' ? 'notes' : (item?.id === 'promo' || item?.title ? 'promo' : 'item');
+            
+            return `
+            <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+                <div class="bg-white rounded-[2rem] w-full max-w-lg shadow-2xl my-auto overflow-hidden animate-in zoom-in-95">
+                    <div class="flex justify-between items-center p-5 border-b border-slate-100 bg-slate-50">
+                        <h3 class="text-lg font-black text-slate-800">${type==='notes'?'الملاحظات':(type==='promo'?'الإعلان الخاص':(item?'تعديل عنصر':'إضافة جديد'))}</h3>
+                        <button type="button" onclick="closeMenuModal()" class="p-2 hover:bg-slate-200 rounded-full text-slate-500 transition"><i data-lucide="x" class="w-5 h-5"></i></button>
+                    </div>
+                    <form onsubmit="saveMenuItem(event)" class="p-6 space-y-4 max-h-[75vh] overflow-y-auto custom-scrollbar">
+                        <input type="hidden" name="type" value="${type}">
+                        
+                        ${type === 'notes' ? `
+                            <div><label class="block text-sm font-bold mb-2">الملاحظات (سطر لكل ملاحظة)</label><textarea required rows="6" name="desc" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:ring-2 focus:ring-indigo-500">${item.desc}</textarea></div>
+                        ` : type === 'promo' ? `
+                            <div class="flex gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200"><input type="checkbox" name="isActive" ${item?.isActive?'checked':''} class="w-5 h-5 accent-indigo-600"><label class="font-bold text-sm">تفعيل إعلان القسم الحالي</label></div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div><label class="block text-xs font-bold mb-1">العنوان</label><input required value="${item?.title||''}" name="title" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"></div>
+                                <div><label class="block text-xs font-bold mb-1">اسم القسم (مثل: الزفاف)</label><input required value="${item?.categoryName||''}" name="categoryName" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"></div>
+                            </div>
+                            <div><label class="block text-xs font-bold mb-1">الوصف</label><textarea required name="desc" rows="2" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm">${item?.desc||''}</textarea></div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div><label class="block text-xs font-bold mb-1">السعر الجديد</label><input required value="${item?.price||''}" name="price" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"></div>
+                                <div><label class="block text-xs font-bold mb-1">السعر القديم</label><input required value="${item?.oldPrice||''}" name="oldPrice" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"></div>
+                            </div>
+                            <div><label class="block text-xs font-bold mb-1">رابط الحجز (واتس اب)</label><input required value="${item?.link||''}" name="link" dir="ltr" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"></div>
+                            ${renderImageUploader()}
+                        ` : `
+                            <div><label class="block text-xs font-bold mb-1">الاسم</label><input required value="${item?.name||''}" name="name" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"></div>
+                            <div><label class="block text-xs font-bold mb-1">السعر</label><input required value="${item?.price||''}" name="price" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"></div>
+                            ${['photography','video'].includes(state.menuTab) ? `
+                                <div><label class="block text-xs font-bold mb-1">المميزات (سطر لكل ميزة)</label><textarea required rows="4" name="features" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm">${item?.features?.join('\n')||''}</textarea></div>
+                                <div class="flex gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200"><input type="checkbox" name="isPopular" ${item?.isPopular?'checked':''} class="w-4 h-4 accent-amber-500"><label class="font-bold text-xs">الأكثر طلباً</label></div>
+                            ` : `
+                                <div><label class="block text-xs font-bold mb-1">الوصف</label><input required value="${item?.desc||''}" name="desc" class="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-sm"></div>
+                                ${state.menuTab === 'photoOnly' ? `<div class="flex gap-2 p-3 bg-slate-50 rounded-xl border border-slate-200"><input type="checkbox" name="isMini" ${item?.isMini?'checked':''} class="w-4 h-4 accent-indigo-600"><label class="font-bold text-xs">باقة مصغرة (إضافة)</label></div>` : ''}
+                            `}
+                            ${['tableaus','gifts','photoOnly'].includes(state.menuTab) && item?.isMini ? '' : renderImageUploader()}
+                        `}
+                        
+                        <div class="pt-4 flex gap-3 border-t border-slate-100">
+                            <button type="submit" class="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white py-3 rounded-xl font-bold transition shadow-lg">حفظ البيانات</button>
+                            <button type="button" onclick="closeMenuModal()" class="px-6 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl font-bold transition">إلغاء</button>
+                        </div>
+                    </form>
+                </div>
+            </div>`;
+        }
+
+        function renderImageUploader() {
+            return `
+            <div>
+                <label class="block text-xs font-bold mb-2">الصور (رفع من الجهاز)</label>
+                <div class="flex flex-wrap gap-2 mb-3">
+                    ${state.formImages.map((img, idx) => `
+                        <div class="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 group">
+                            <img src="${img}" class="w-full h-full object-cover">
+                            <button type="button" onclick="removeFormImage(${idx})" class="absolute inset-0 bg-red-500/80 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="flex mt-1">
+                    <label class="w-full bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl px-3 py-6 text-xs cursor-pointer flex flex-col items-center justify-center gap-2 hover:bg-indigo-50 hover:border-indigo-400 transition-all outline-none">
+                        <i data-lucide="upload-cloud" class="w-7 h-7 text-indigo-500"></i>
+                        <span class="font-bold text-slate-700 text-sm">اضغط هنا لاختيار ورفع الصور</span>
+                        <span class="text-[10px] text-slate-500 font-normal">يتم ضغط الصور تلقائياً للحفاظ على سرعة عرض المنيو</span>
+                        <input type="file" accept="image/*" multiple class="hidden" onchange="handleFileUpload(event)">
+                    </label>
+                </div>
+            </div>`;
+        }
+
+        // دالة توفير البيانات المبدئية لعام 2026
         function getInitialData() {
             return {
                 promos: {
-                    photography: { isActive: true, title: "🔥 باقة الأفراح الشاملة 🔥", desc: "خصم حصري على الباقة המاسية بمناسبة الموسم.", price: "12,000", oldPrice: "15,000", images: ["https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1200&auto=format&fit=crop", "https://images.unsplash.com/photo-1606800052052-a08af7148866?q=80&w=1200&auto=format&fit=crop"], link: "https://wa.me/201201260040", categoryName: 'الزفاف' },
-                    photoOnly: { isActive: true, title: "سيشن تصوير كابلز", desc: "احجز سيشن الخطوبة الآن واطبع صورك مجاناً!", price: "3,500", oldPrice: "4,500", images: ["https://images.unsplash.com/photo-1583939000140-6218d6e38cce?q=80&w=1200&auto=format&fit=crop"], link: "https://wa.me/201201260040", categoryName: 'التصوير' },
-                    video: { isActive: true, title: "السينما 4K", desc: "فيلمك بأعلى جودة سينمائية وطيران درون مجاني.", price: "9,000", oldPrice: "11,000", images: ["https://images.unsplash.com/photo-1589087394126-9a2fc487e22f?q=80&w=1200&auto=format&fit=crop"], link: "https://wa.me/201201260040", categoryName: 'الفيديو' },
+                    photography: { isActive: true, title: "🔥 باقة الأفراح الشاملة 🔥", desc: "خصم حصري على الباقة VIP بمناسبة الموسم.", price: "7,000", oldPrice: "9,000", images: ["https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=1200&auto=format&fit=crop", "https://images.unsplash.com/photo-1606800052052-a08af7148866?q=80&w=1200&auto=format&fit=crop"], link: "https://wa.me/201097576073", categoryName: 'الزفاف' },
+                    photoOnly: { isActive: true, title: "باقات الجلسات الخاصة", desc: "سیشن زفاف، خطوبة، حنة، كتب كتاب مع طباعة فاخرة!", price: "3,000", oldPrice: "4,000", images: ["https://images.unsplash.com/photo-1583939000140-6218d6e38cce?q=80&w=1200&auto=format&fit=crop"], link: "https://wa.me/201097576073", categoryName: 'التصوير' },
+                    video: { isActive: true, title: "وحدة ميكسر HD كاملة", desc: "تغطية كاملة بأعلى جودة سينمائية.", price: "6,000", oldPrice: "8,000", images: ["https://images.unsplash.com/photo-1589087394126-9a2fc487e22f?q=80&w=1200&auto=format&fit=crop"], link: "https://wa.me/201097576073", categoryName: 'الفيديو' },
                     tableaus: { isActive: false }, gifts: { isActive: false }
                 },
                 photography: [
-                    { id: 1, name: "الباقة الفضية", price: "5,000", images: ["https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop"], features: ["تصوير قاعة الفرح", "50 صورة معدلة"] },
-                    { id: 2, name: "الباقة الذهبية", price: "8,500", isPopular:true, images: ["https://images.unsplash.com/photo-1583939000140-6218d6e38cce?q=80&w=800&auto=format&fit=crop"], features: ["سيشن + قاعة", "100 صورة", "ألبوم ديجيتال 30x40"] }
+                    { id: 1, name: "الباقة 1", price: "4,000", images: ["https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=800&auto=format&fit=crop"], features: ["سيشن زفاف، تصوير القاعة", "45x30 اليوم مقاس", "50x40 طباعة تابلوه", "20x30 طباعة 1 ستاند", "طباعة كروت هدية"] },
+                    { id: 2, name: "الباقة 2", price: "4,500", images: ["https://images.unsplash.com/photo-1583939000140-6218d6e38cce?q=80&w=800&auto=format&fit=crop"], features: ["سيشن زفاف، تصوير كاجوال", "45x30 اليوم مقاس", "50x40 طباعة تابلوه", "20x30 طباعة 2 ستاند", "طباعة كروت هدية"] },
+                    { id: 3, name: "الباقة 3", price: "6,000", isPopular:true, images: ["https://images.unsplash.com/photo-1542042161784-26ab9e041e89?q=80&w=800&auto=format&fit=crop"], features: ["سيشن زفاف، سيشن كاجوال، تصوير القاعة", "45x30 اليوم مقاس", "50x70 طباعة تابلوه", "20x30 طباعة 2 ستاند", "طباعة كروت هدية"] },
+                    { id: 4, name: "باقة VIP", price: "7,000", images: ["https://images.unsplash.com/photo-1520854221256-17451cc331bf?q=80&w=800&auto=format&fit=crop"], features: ["سيشن زفاف، سيشن كاجوال، تصوير القاعة", "60x40 اليوم مقاس", "50x70 طباعة 2 تابلوه", "20x30 طباعة 2 ستاند", "طباعة 40 كارت هدية"] }
                 ],
                 photoOnly: [
-                    { id: 10, name: "سيشن خارجي", price: "2,500", desc: "ساعتين تصوير", images: ["https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=200&auto=format&fit=crop"] },
-                    { id: 14, name: "تعديل صور إضافية", price: "500", desc: "تعديل 20 صورة", isMini: true }
+                    { id: 10, name: "باقة الجلسات (3000)", price: "3,000", desc: "سيشن زفاف (خطوبة) حنة (كتب كتاب). طباعة 30x45 + كروت هدية + تابلوه 40x50 + 20x30.", images: ["https://images.unsplash.com/photo-1519741497674-611481863552?q=80&w=200&auto=format&fit=crop"] },
+                    { id: 11, name: "باقة الجلسات (3500)", price: "3,500", desc: "سيشن زفاف (خطوبة) حنة (كتب كتاب). طباعة 30x80 + كروت هدية + تابلوه 70x50 + 20x30.", images: ["https://images.unsplash.com/photo-1542042161784-26ab9e041e89?q=80&w=200&auto=format&fit=crop"] },
+                    { id: 12, name: "سيشن زفاف أو كاجوال", price: "2,000", desc: "بدون طباعة", isMini: true },
+                    { id: 13, name: "سيشن خطوبة أو كتب كتاب", price: "1,500", desc: "بدون طباعة", isMini: true },
+                    { id: 14, name: "تصوير فوتوغرافي", price: "1,000", desc: "بدون طباعة", isMini: true },
+                    { id: 15, name: "كاميرا إضافية فوتوغرافي", price: "1,000", desc: "بدون طباعة", isMini: true },
+                    { id: 16, name: "فوتو عيد ميلاد أو سبوع", price: "800", desc: "بدون طباعة", isMini: true },
+                    { id: 17, name: "تصوير في الاستوديو حنة", price: "800", desc: "بدون طباعة", isMini: true }
                 ],
-                video: [ { id: 5, name: "تصوير سينمائي", price: "9,000", images: ["https://images.unsplash.com/photo-1589087394126-9a2fc487e22f?q=80&w=800&auto=format&fit=crop"], features: ["2 كاميرا 4K", "مونتاج كامل"] } ],
+                video: [ 
+                    { id: 20, name: "كاميرا فيديو حنة HD", price: "1,000", images: ["https://images.unsplash.com/photo-1601506521937-0121a7fc2a6b?q=80&w=800&auto=format&fit=crop"], features: ["كاميرا HD", "تسليم على فلاشة"] },
+                    { id: 21, name: "وحدة ميكسر فيديو HD كاملة", price: "3,500", images: ["https://images.unsplash.com/photo-1589087394126-9a2fc487e22f?q=80&w=800&auto=format&fit=crop"], features: ["وحدة ميكسر كاملة HD"] },
+                    { id: 22, name: "وحدة ميكسر فيديو يوم كامل", price: "6,000", images: ["https://images.unsplash.com/photo-1536240478700-b869070f9279?q=80&w=800&auto=format&fit=crop"], features: ["وحدة ميكسر", "يوم كامل"] }
+                ],
                 tableaus: [ 
-                    { id: 6, name: "تابلوه خشب", price: "600", desc: "مقاس 50x70 سم", images: ["https://images.unsplash.com/photo-1544457070-4cd773b4d71e?q=80&w=800&auto=format&fit=crop"] },
-                    { id: 7, name: "تابلوه كانفاس", price: "950", desc: "طباعة فاخرة", images: ["https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=800&auto=format&fit=crop"] },
-                    { id: 15, name: "تابلوه عرض 3 قطع", desc: "تصميم عصري", price: "1,200", images: ["https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?q=80&w=800&auto=format&fit=crop"] },
-                    { id: 17, name: "برواز اكريلك", desc: "شفاف وعصري", price: "850", images: ["https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=800&auto=format&fit=crop"] }
+                    { id: 30, name: "تابلوه خشب", price: "600", desc: "مقاس 50x70 سم", images: ["https://images.unsplash.com/photo-1544457070-4cd773b4d71e?q=80&w=800&auto=format&fit=crop"] },
+                    { id: 31, name: "تابلوه كانفاس", price: "950", desc: "طباعة فاخرة", images: ["https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=800&auto=format&fit=crop"] },
+                    { id: 32, name: "تابلوه عرض 3 قطع", desc: "تصميم عصري", price: "1,200", images: ["https://images.unsplash.com/photo-1582555172866-f73bb12a2ab3?q=80&w=800&auto=format&fit=crop"] },
+                    { id: 33, name: "برواز اكريلك", desc: "شفاف وعصري", price: "850", images: ["https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=800&auto=format&fit=crop"] }
                 ],
                 gifts: [ 
-                    { id: 8, name: "كتاب زوار", price: "400", desc: "خشب محفور", images: ["https://images.unsplash.com/photo-1517457210165-27a3c333a5da?q=80&w=800&auto=format&fit=crop"] },
-                    { id: 9, name: "تصوير فوري", price: "1,500", desc: "50 صورة للضيوف", images: ["https://images.unsplash.com/photo-1526304760382-3591d3840148?q=80&w=800&auto=format&fit=crop"] },
-                    { id: 16, name: "بوكس صور خشبي", desc: "صندوق أنيق للصور", price: "750", images: ["https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=800&auto=format&fit=crop"] },
-                    { id: 18, name: "مج حراري", desc: "طباعة صورتك", price: "250", images: ["https://images.unsplash.com/photo-1517457210165-27a3c333a5da?q=80&w=800&auto=format&fit=crop"] }
+                    { id: 40, name: "كتاب زوار", price: "400", desc: "خشب محفور", images: ["https://images.unsplash.com/photo-1517457210165-27a3c333a5da?q=80&w=800&auto=format&fit=crop"] },
+                    { id: 41, name: "تصوير فوري", price: "1,500", desc: "50 صورة للضيوف", images: ["https://images.unsplash.com/photo-1526304760382-3591d3840148?q=80&w=800&auto=format&fit=crop"] },
+                    { id: 42, name: "بوكس صور خشبي", desc: "صندوق أنيق للصور", price: "750", images: ["https://images.unsplash.com/photo-1513519245088-0e12902e5a38?q=80&w=800&auto=format&fit=crop"] },
+                    { id: 43, name: "مج حراري", desc: "طباعة صورتك", price: "250", images: ["https://images.unsplash.com/photo-1517457210165-27a3c333a5da?q=80&w=800&auto=format&fit=crop"] }
                 ]
             };
         }
